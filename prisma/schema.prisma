@@ -1,0 +1,435 @@
+// ZestMart PK — Production PostgreSQL & Prisma Schema
+// Nationwide Multi-Vendor Ecommerce Marketplace
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// ENUMS
+// -------------------------------------------------------------
+
+enum UserRole {
+  CUSTOMER
+  SELLER
+  STAFF
+  MANAGER
+  ADMIN
+}
+
+enum SellerStatus {
+  PENDING_APPROVAL
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum OrderStatus {
+  CONFIRMED
+  PROCESSING
+  DISPATCHED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethodType {
+  CASH_ON_DELIVERY
+  JAZZCASH
+  EASYPAISA
+  RAAST_BANK_TRANSFER
+  CREDIT_DEBIT_CARD
+}
+
+enum CourierProviderType {
+  TCS_EXPRESS
+  LEOPARDS_COURIER
+  TRAX_LOGISTICS
+}
+
+enum AuditAction {
+  USER_LOGIN
+  ORDER_PLACED
+  ORDER_CANCELLED
+  SELLER_APPROVED
+  SELLER_SUSPENDED
+  PRODUCT_APPROVED
+  PRODUCT_REJECTED
+  PAYOUT_PROCESSED
+  ROLE_MODIFIED
+  COUPON_CREATED
+}
+
+// -------------------------------------------------------------
+// USER & RBAC
+// -------------------------------------------------------------
+
+model User {
+  id               String       @id @default(uuid())
+  email            String?      @unique
+  phone            String       @unique // Pakistani 03XX-XXXXXXX
+  passwordHash     String?
+  fullName         String
+  role             UserRole     @default(CUSTOMER)
+  isPhoneVerified  Boolean      @default(false)
+  isEmailVerified  Boolean      @default(false)
+  twoFactorEnabled Boolean      @default(false)
+  avatarUrl        String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  sellerProfile    Seller?
+  addresses        Address[]
+  orders           Order[]
+  reviews          Review[]
+  wishlist         WishlistItem[]
+  cart             CartItem[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+// -------------------------------------------------------------
+// SELLER / MULTI-VENDOR
+// -------------------------------------------------------------
+
+model Seller {
+  id                  String       @id @default(uuid())
+  userId              String       @unique
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeName           String       @unique
+  slug                String       @unique
+  legalBusinessName   String
+  ntnNumber           String?      @unique // Pakistani FBR NTN
+  cnicNumber          String?      // Pakistani 13-digit CNIC
+  city                String
+  province            String
+  registeredAddress   String
+  pickupAddress       String
+  bankName            String       // Meezan Bank, Bank Alfalah, HBL, etc.
+  bankAccountTitle    String
+  bankIban            String       // PKXX XXXX XXXX XXXX XXXX XXXX
+  status              SellerStatus @default(PENDING_APPROVAL)
+  isVerified          Boolean      @default(false)
+  badge               String?
+  commissionRate      Decimal      @default(8.50) @db.Decimal(5, 2) // Default 8.5%
+  rating              Decimal      @default(5.00) @db.Decimal(3, 2)
+  ratingCount         Int          @default(0)
+  responseRate        String       @default("98%")
+  dispatchPerformance String       @default("97% on-time")
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  products            Product[]
+  payouts             SellerPayout[]
+  orderItems          OrderItem[]
+
+  @@index([status])
+  @@index([city])
+}
+
+model SellerPayout {
+  id             String        @id @default(uuid())
+  sellerId       String
+  seller         Seller        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  amountPKR      Decimal       @db.Decimal(12, 2)
+  commissionPKR  Decimal       @db.Decimal(12, 2)
+  netAmountPKR   Decimal       @db.Decimal(12, 2)
+  bankReference  String        @unique
+  status         PaymentStatus @default(PENDING)
+  periodStart    DateTime
+  periodEnd      DateTime
+  processedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([sellerId])
+}
+
+// -------------------------------------------------------------
+// CATALOG & INVENTORY
+// -------------------------------------------------------------
+
+model Category {
+  id             String     @id @default(uuid())
+  name           String     @unique
+  slug           String     @unique
+  icon           String?
+  description    String?
+  commissionRate Decimal    @default(8.00) @db.Decimal(5, 2)
+  parentId       String?
+  parent         Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children       Category[] @relation("SubCategories")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  products       Product[]
+
+  @@index([slug])
+}
+
+model Product {
+  id                    String        @id @default(uuid())
+  vendorId              String
+  vendor                Seller        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  categoryId            String
+  category              Category      @relation(fields: [categoryId], references: [id])
+  title                 String
+  slug                  String        @unique
+  sku                   String        @unique
+  pricePKR              Decimal       @db.Decimal(10, 2)
+  originalPricePKR      Decimal?      @db.Decimal(10, 2)
+  discountPercent       Int?
+  shortDescription      String
+  description           String
+  specifications        Json          @default("{}")
+  stockQuantity         Int           @default(0)
+  inStock               Boolean       @default(true)
+  codAvailable          Boolean       @default(true)
+  isApproved            Boolean       @default(true)
+  isFeatured            Boolean       @default(false)
+  isTrending            Boolean       @default(false)
+  rating                Decimal       @default(5.00) @db.Decimal(3, 2)
+  reviewCount           Int           @default(0)
+  estimatedDeliveryDays String        @default("2-3 Days")
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  images                ProductImage[]
+  variants              ProductVariantOption[]
+  orderItems            OrderItem[]
+  reviews               Review[]
+  cartItems             CartItem[]
+  wishlistItems         WishlistItem[]
+
+  @@index([vendorId])
+  @@index([categoryId])
+  @@index([isApproved])
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+
+  @@index([productId])
+}
+
+model ProductVariantOption {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantType String   // "Color", "Size"
+  value       String   // "Obsidian Black", "42 (9 US)"
+  priceDelta  Decimal  @default(0.00) @db.Decimal(10, 2)
+  stock       Int      @default(10)
+
+  @@index([productId])
+}
+
+// -------------------------------------------------------------
+// CART & WISHLIST
+// -------------------------------------------------------------
+
+model CartItem {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity      Int      @default(1)
+  selectedColor String?
+  selectedSize  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, productId, selectedColor, selectedSize])
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+// -------------------------------------------------------------
+// ADDRESSES
+// -------------------------------------------------------------
+
+model Address {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label         String   @default("Home") // "Home", "Office"
+  fullName      String
+  phone         String
+  streetAddress String
+  areaLandmark  String
+  city          String
+  province      String
+  postalCode    String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders        Order[]
+
+  @@index([userId])
+}
+
+// -------------------------------------------------------------
+// ORDERS & COURIER FULFILLMENT
+// -------------------------------------------------------------
+
+model Order {
+  id               String            @id @default(uuid())
+  orderNumber      String            @unique // e.g. "ZM-88910"
+  userId           String
+  user             User              @relation(fields: [userId], references: [id])
+  shippingAddressId String
+  shippingAddress  Address           @relation(fields: [shippingAddressId], references: [id])
+  subtotalPKR      Decimal           @db.Decimal(12, 2)
+  shippingFeePKR   Decimal           @db.Decimal(10, 2)
+  discountPKR      Decimal           @default(0.00) @db.Decimal(10, 2)
+  totalPKR         Decimal           @db.Decimal(12, 2)
+  status           OrderStatus       @default(CONFIRMED)
+  paymentMethod    PaymentMethodType
+  paymentStatus    PaymentStatus     @default(PENDING)
+  courierProvider  CourierProviderType
+  trackingNumber   String            @unique // e.g. "TCS-PK-981023"
+  couponCode       String?
+  cancelReason     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  items            OrderItem[]
+  shipmentHistory  ShipmentMilestone[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([trackingNumber])
+}
+
+model OrderItem {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  sellerId      String
+  seller        Seller   @relation(fields: [sellerId], references: [id])
+  quantity      Int      @default(1)
+  unitPricePKR  Decimal  @db.Decimal(10, 2)
+  totalPricePKR Decimal  @db.Decimal(10, 2)
+  selectedColor String?
+  selectedSize  String?
+  commissionPKR Decimal  @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([sellerId])
+}
+
+model ShipmentMilestone {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      String
+  location    String
+  description String
+  timestamp   DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// -------------------------------------------------------------
+// COUPONS & DISCOUNTS
+// -------------------------------------------------------------
+
+model Coupon {
+  id              String   @id @default(uuid())
+  code            String   @unique // e.g. "ZESTPK10"
+  discountPercent Int
+  maxDiscountPKR  Decimal  @db.Decimal(10, 2)
+  minSpendPKR     Decimal  @default(0.00) @db.Decimal(10, 2)
+  isActive        Boolean  @default(true)
+  validFrom       DateTime @default(now())
+  validUntil      DateTime
+  usageLimit      Int      @default(1000)
+  usedCount       Int      @default(0)
+
+  @@index([code])
+}
+
+// -------------------------------------------------------------
+// REVIEWS & NOTIFICATIONS
+// -------------------------------------------------------------
+
+model Review {
+  id               String   @id @default(uuid())
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating           Int      // 1 to 5
+  title            String
+  comment          String
+  verifiedPurchase Boolean  @default(true)
+  helpfulCount     Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([productId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   // "order", "shipping", "promo", "seller_payout"
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// -------------------------------------------------------------
+// SECURITY AUDIT LOGS
+// -------------------------------------------------------------
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    AuditAction
+  ipAddress String?
+  userAgent String?
+  details   Json        @default("{}")
+  createdAt DateTime    @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}

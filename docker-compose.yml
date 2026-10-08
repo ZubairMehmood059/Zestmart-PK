@@ -1,0 +1,51 @@
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: zestmart_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zestmart_user
+      POSTGRES_PASSWORD: zestmart_secure_pass
+      POSTGRES_DB: zestmart_pk
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zestmart_user -d zestmart_pk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache for Session & Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: zestmart_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Full-Stack ZestMart Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zestmart_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://zestmart_user:zestmart_secure_pass@postgres:5432/zestmart_pk?schema=public
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

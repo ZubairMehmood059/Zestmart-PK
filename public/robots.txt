@@ -1,0 +1,19 @@
+# Robots.txt for ZestMart PK — Pakistan's Ultimate Electronics Marketplace
+User-agent: *
+Allow: /
+Allow: /#shop
+Allow: /#categories
+Allow: /#product*
+Allow: /#faq
+Allow: /#privacy
+
+# Disallow private admin and API paths
+Disallow: /admin
+Disallow: /api/internal/
+Disallow: /#admin
+
+# Crawl Delay
+Crawl-delay: 1
+
+# Sitemap Location
+Sitemap: https://zestmart.pk/sitemap.xml

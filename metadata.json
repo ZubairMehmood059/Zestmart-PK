@@ -1,0 +1,6 @@
+{
+  "name": "ZestMart PK",
+  "description": "Pakistan's Ultimate Choice Electronics Marketplace. Multi-vendor smartphones, laptops, PC gaming rigs, and computing hardware platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

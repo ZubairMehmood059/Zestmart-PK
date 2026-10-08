@@ -1,0 +1,17 @@
+{
+  "name": "ZestMart PK — Pakistan's Ultimate Electronics Marketplace",
+  "short_name": "ZestMart PK",
+  "description": "Pakistan's premier multi-vendor electronics marketplace for smartphones, laptops, PC gaming hardware, and gadgets.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#022c22",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
